@@ -11,18 +11,36 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+namespace
+{
+	const int BORDER( 20 );
+	const int BUTTON_SIZE( 200 );
+}
 
 //==============================================================================
 AudioFreezePluginAudioProcessorEditor::AudioFreezePluginAudioProcessorEditor (AudioFreezePluginAudioProcessor& p)
-    : AudioProcessorEditor (&p), processor (p)
+    : AudioProcessorEditor (&p), processor (p),
+	m_freeze_button(nullptr),
+	m_freeze_param( dynamic_cast<AudioParameterBool*>(p.getParameters().getFirst()) )
 {
-    // Make sure that before the constructor has finished, you've set the
-    // editor's size to whatever you need it to be.
-    setSize (400, 300);
+	m_freeze_button = new ToggleButton( "Freeze" );
+	m_freeze_button->addListener( this );
+	addAndMakeVisible( m_freeze_button );
+
+	const int width      		= BUTTON_SIZE + (BORDER * 2);
+	const int height      		= BUTTON_SIZE + (BORDER * 2);
+	setSize( width, height );
+	
 }
 
 AudioFreezePluginAudioProcessorEditor::~AudioFreezePluginAudioProcessorEditor()
 {
+
+}
+
+void AudioFreezePluginAudioProcessorEditor::buttonClicked (Button*)
+{
+	*m_freeze_param = !(*m_freeze_param);
 }
 
 //==============================================================================
@@ -31,13 +49,11 @@ void AudioFreezePluginAudioProcessorEditor::paint (Graphics& g)
     // (Our component is opaque, so we must completely fill the background with a solid colour)
     g.fillAll (getLookAndFeel().findColour (ResizableWindow::backgroundColourId));
 
-    g.setColour (Colours::white);
-    g.setFont (15.0f);
-    g.drawFittedText ("Hello World!", getLocalBounds(), Justification::centred, 1);
+	
 }
 
 void AudioFreezePluginAudioProcessorEditor::resized()
 {
-    // This is generally where you'll want to lay out the positions of any
-    // subcomponents in your editor..
+	Rectangle<int> reduced = getLocalBounds().reduced( BORDER );
+	m_freeze_button->setBounds( reduced );
 }

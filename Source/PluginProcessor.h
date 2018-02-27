@@ -12,6 +12,7 @@
 
 #include "../JuceLibraryCode/JuceHeader.h"
 
+class AUDIO_FREEZE_EFFECT;
 
 //==============================================================================
 /**
@@ -59,4 +60,8 @@ public:
 private:
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioFreezePluginAudioProcessor)
+	
+	std::unique_ptr<AUDIO_FREEZE_EFFECT>					m_effect;
+	
+	AudioParameterBool*										m_freeze_active;
 };

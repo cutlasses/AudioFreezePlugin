@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <JUCERPROJECT name="AudioFreezePlugin" projectType="audioplug" buildStandalone="1"
-              jucerVersion="5.2.1">
+              jucerVersion="5.2.1" bundleIdentifier="com.Cutlasses.AudioFreeze"
+              aaxIdentifier="com.Cutlasses.AudioFreeze" pluginManufacturer="Cutlasses"
+              pluginName="AudioFreeze" pluginDesc="AudioFreeze">
   <MAINGROUP id="c3fxwh" name="AudioFreezePlugin">
     <GROUP id="{AFE537CB-825A-6BD0-95CA-761BA4C32C58}" name="Source">
       <FILE id="tz56y9" name="Util.h" compile="0" resource="0" file="Source/Util.h"/>

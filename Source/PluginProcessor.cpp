@@ -8,8 +8,46 @@
   ==============================================================================
 */
 
+#include <array>
+
+#include "AudioFreezeEffect.h"
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Util.h"
+
+namespace
+{
+	// mixdown N channels of buffer into channel 0, using the weights array
+	template< size_t N >
+	void mix_down( AudioSampleBuffer& buffer, std::array<float, N > weights )
+	{
+		jassert( buffer.getNumChannels() == N );
+		
+		for( int s = 0; s < buffer.getNumSamples(); ++s )
+		{
+			float mixed = 0.0f;
+			for( int c = 0; c < buffer.getNumChannels(); ++c )
+			{
+				mixed += buffer.getSample( c, s ) * weights[ c ];
+			}
+			
+			buffer.setSample( 0, s, mixed );
+		}
+	}
+	
+	// mix buffer b2 into b1 using weights w1, w2
+	void mix_into( AudioSampleBuffer& b1, AudioSampleBuffer& b2, int channel, float w1, float w2 )
+	{
+		jassert( b1.getNumChannels() > channel && b2.getNumChannels() > channel );
+		
+		for( int s = 0; s < b1.getNumSamples(); ++s )
+		{
+			float mixed = ( b1.getSample( channel, s ) * w1 ) + ( b2.getSample( channel, s ) * w2 );
+			
+			b1.setSample( channel, s, mixed );
+		}
+	}
+}
 
 
 //==============================================================================
@@ -22,9 +60,14 @@ AudioFreezePluginAudioProcessor::AudioFreezePluginAudioProcessor()
                       #endif
                        .withOutput ("Output", AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ),
 #endif
+	m_effect( std::make_unique<AUDIO_FREEZE_EFFECT>() )
 {
+	addParameter( m_freeze_active = new AudioParameterBool(	"freeze",     			// parameterID
+														   	"Freeze!",     			// parameter name
+														   	false ) );       		// default value
+
 }
 
 AudioFreezePluginAudioProcessor::~AudioFreezePluginAudioProcessor()
@@ -132,31 +175,47 @@ bool AudioFreezePluginAudioProcessor::isBusesLayoutSupported (const BusesLayout&
 
 void AudioFreezePluginAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& midiMessages)
 {
-    ScopedNoDenormals noDenormals;
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
-
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
-
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer (channel);
-
-        // ..do something to the data...
-    }
+	ScopedNoDenormals no_denormals;
+	
+	const double current_sample_rate	= getSampleRate();
+	const int current_block_size		= getBlockSize();
+	AUDIO_BLOCK_SAMPLES					= current_block_size;
+	AUDIO_SAMPLE_RATE					= trunc_to_int( current_sample_rate );
+	 
+	bool stereo(false);
+	if( buffer.getNumChannels() > 1 )
+	{
+		jassert( buffer.getNumChannels() == 2 );
+		
+		stereo = true;
+	}
+	
+	if( stereo )
+	{
+		// mix the 2 channels down into one
+		constexpr std::array<float, 2> stereo_weights = { 0.5f, 0.5f };
+		mix_down( buffer, stereo_weights );
+	}
+	
+	m_effect->pre_process_audio( buffer, m_effect->num_input_channels(), m_effect->num_output_channels() );
+	
+	m_effect->set_freeze( *m_freeze_active );
+	
+	m_effect->update();
+	
+	AudioSampleBuffer output( m_effect->num_output_channels(), buffer.getNumSamples() );
+	m_effect->post_process_audio( output );
+	
+	// mix output with original input
+	//mix_into( output, buffer, 0, *m_mix, 1.0f - *(m_mix) );
+	
+	// copy our mixed output to channel 0 of buffer
+	buffer.copyFrom( 0, 0, output, 0, 0, output.getNumSamples() );
+	
+	if( stereo )
+	{
+		buffer.copyFrom( 1, 0, output, 0, 0, output.getNumSamples() );
+	}
 }
 
 //==============================================================================

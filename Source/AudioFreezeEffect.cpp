@@ -51,6 +51,16 @@ AUDIO_FREEZE_EFFECT::AUDIO_FREEZE_EFFECT() :
   memset( m_buffer, 0, sizeof(m_buffer) );
 }
 
+int AUDIO_FREEZE_EFFECT::num_input_channels() const
+{
+	return 1;
+}
+
+int AUDIO_FREEZE_EFFECT::num_output_channels() const
+{
+	return 1;
+}
+
 int AUDIO_FREEZE_EFFECT::wrap_index_to_loop_section( int index ) const
 {
   if( index > m_loop_end )
@@ -222,9 +232,9 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed_and_cross_fade( int16_t* d
 
       if( headi >= cross_fade_start )
       {
-        const int cf_offset     = cross_fade_start - m_loop_start;
+        const int cf_offset     = cross_fade_start - m_loop_start - CROSS_FADE_SAMPLES; // cross fade start before the loop starts and fades in
         const float cf_head     = m_head - cf_offset;
-        const float cf_t        = ( headi / cross_fade_start ) / static_cast<float>(CROSS_FADE_SAMPLES);
+        const float cf_t        = ( headi - cross_fade_start ) / static_cast<float>(CROSS_FADE_SAMPLES);
         const int16_t cf_sample = m_speed < 1.0f ? read_sub_sample( cf_head ) : read_sample( cf_head );
 
         dest[x]                 = lerp( cf_sample, sample, cf_t );
@@ -312,41 +322,8 @@ void AUDIO_FREEZE_EFFECT::update()
   ASSERT_MSG( m_loop_start >= 0 && m_loop_start < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::update()" );
   ASSERT_MSG( m_loop_end >= 0 && m_loop_end < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::update()" );
 	
-	/*
-  if( m_freeze_active )
-  {    
-    audio_block_t* block        = allocate();
-
-    if( block != nullptr )
-    {
-      if( m_cross_fade )
-      {
-        read_from_buffer_with_speed_and_cross_fade( block->data, AUDIO_BLOCK_SAMPLES );   
-      }
-      else
-      {
-        read_from_buffer_with_speed( block->data, AUDIO_BLOCK_SAMPLES );
-      }
-  
-      transmit( block, 0 );
-    
-      release( block );    
-    }
-  }
-  else
-  {
-    audio_block_t* block        = receiveReadOnly();
-
-    if( block != nullptr )
-    {
-      write_to_buffer( block->data, AUDIO_BLOCK_SAMPLES );
-  
-      transmit( block, 0 );
-  
-      release( block );
-    }
-  }
-	 */
+  process_audio_in( 0 );
+  process_audio_out( 0 );
 }
 
 void AUDIO_FREEZE_EFFECT::set_bit_depth_impl( int sample_size_in_bits )
@@ -467,13 +444,26 @@ void AUDIO_FREEZE_EFFECT::set_centre_impl( float centre )
 }
 
 void AUDIO_FREEZE_EFFECT::process_audio_in_impl( int channel, const int16_t* sample_data, int num_samples )
-{
-	
+{	
+	if( !m_freeze_active )
+	{
+		write_to_buffer( sample_data, num_samples );
+	}
 }
 
 void AUDIO_FREEZE_EFFECT::process_audio_out_impl( int channel, int16_t* sample_data, int num_samples )
 {
-	
+	if( m_freeze_active )
+	{
+		if( m_cross_fade )
+		{
+			read_from_buffer_with_speed_and_cross_fade( sample_data, num_samples );
+		}
+		else
+		{
+			read_from_buffer_with_speed( sample_data, num_samples );
+		}
+	}
 }
 
 bool AUDIO_FREEZE_EFFECT::is_freeze_active() const

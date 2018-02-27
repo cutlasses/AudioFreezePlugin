@@ -17,7 +17,7 @@
 //==============================================================================
 /**
 */
-class AudioFreezePluginAudioProcessorEditor  : public AudioProcessorEditor
+class AudioFreezePluginAudioProcessorEditor  : public AudioProcessorEditor, public ToggleButton::Listener
 {
 public:
     AudioFreezePluginAudioProcessorEditor (AudioFreezePluginAudioProcessor&);
@@ -26,11 +26,18 @@ public:
     //==============================================================================
     void paint (Graphics&) override;
     void resized() override;
+	
+	//// ToggleButton::Listener ////
+	void buttonClicked (Button*) override;
+	/////////////////////////
 
 private:
     // This reference is provided as a quick way for your editor to
     // access the processor object that created it.
     AudioFreezePluginAudioProcessor& processor;
+	
+	ScopedPointer<ToggleButton>						m_freeze_button;
+	AudioParameterBool* 							m_freeze_param;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioFreezePluginAudioProcessorEditor)
 };

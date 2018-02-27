@@ -4,6 +4,10 @@
 
 #define FREEZE_QUEUE_SIZE_IN_BYTES     1024*50      // 50k
 
+#ifdef TARGET_JUCE
+extern int AUDIO_BLOCK_SAMPLES;           // NASTY HACK - make these global for JUCE
+extern int AUDIO_SAMPLE_RATE;
+#endif
 
 class AUDIO_FREEZE_EFFECT : public TEENSY_AUDIO_STREAM_WRAPPER
 {
@@ -57,6 +61,9 @@ protected:
 public:
 
   AUDIO_FREEZE_EFFECT();
+	
+  int                   num_input_channels() const override;
+  int                   num_output_channels() const override;
 
   virtual void          update() override;
 
