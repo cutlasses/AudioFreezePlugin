@@ -24,7 +24,7 @@ namespace
         }
         else
         {
-            return s * std::numeric_limits< int16_t >::min();
+			return -s * std::numeric_limits< int16_t >::min();
         }
     }
     

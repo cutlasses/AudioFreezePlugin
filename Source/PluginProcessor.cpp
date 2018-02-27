@@ -206,9 +206,6 @@ void AudioFreezePluginAudioProcessor::processBlock (AudioBuffer<float>& buffer, 
 	AudioSampleBuffer output( m_effect->num_output_channels(), buffer.getNumSamples() );
 	m_effect->post_process_audio( output );
 	
-	// mix output with original input
-	//mix_into( output, buffer, 0, *m_mix, 1.0f - *(m_mix) );
-	
 	// copy our mixed output to channel 0 of buffer
 	buffer.copyFrom( 0, 0, output, 0, 0, output.getNumSamples() );
 	
