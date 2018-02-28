@@ -32,21 +32,60 @@ int freeze_queue_size_in_samples( int sample_size_in_bits )
 
 /////////////////////////////////////////////////////////////////////
 
+RANDOM_LFO::RANDOM_LFO( float min_period, float max_period ) :
+  m_min_period( min_period ),
+  m_max_period( max_period ),
+  m_p_ratio( 0.0f ),
+  m_time( 0.0f ),
+  m_prev_value( 0.0f )
+{
+	choose_next_period();
+}
+
+void RANDOM_LFO::set_period( float seconds )
+{
+	m_p_ratio = ( 2.0f * M_PI ) / seconds;
+}
+
+void RANDOM_LFO::choose_next_period()
+{
+	set_period( random_ranged( m_min_period, m_max_period ) );
+}
+
+float RANDOM_LFO::next( float time_inc )
+{
+	m_time += time_inc;
+	
+	const float next_value = sin( m_time * m_p_ratio );
+	
+	if( m_prev_value > 0.0f != next_value > 0.0f )
+	{
+		// recalculate the period on the zero crossing
+		choose_next_period();
+	}
+	
+	m_prev_value = next_value;
+	return next_value;
+}
+
+/////////////////////////////////////////////////////////////////////
+
 AUDIO_FREEZE_EFFECT::AUDIO_FREEZE_EFFECT() :
   m_buffer(),
   m_head(0),
-  m_speed(1.0f),
+  m_speed(0.25f),
   m_loop_start(0),
   m_loop_end(freeze_queue_size_in_samples(16) - 1),
   m_sample_size_in_bits(16),
   m_buffer_size_in_samples( freeze_queue_size_in_samples( 16 ) ),
   m_freeze_active(false),
   m_reverse(false),
-  m_cross_fade(false),
+  m_cross_fade(true),
   m_next_sample_size_in_bits(16),
-  m_next_length(1.0f),
+  m_next_length(0.25f),
   m_next_centre(0.5f),
-  m_next_speed(1.0f)
+  m_next_speed(0.25f),
+  m_lfo( 1.0f, 8.0f )
 {
   memset( m_buffer, 0, sizeof(m_buffer) );
 }
@@ -262,7 +301,7 @@ float AUDIO_FREEZE_EFFECT::next_head( float inc ) const
 
   ASSERT_MSG( truncf(m_head) >= 0 && truncf(m_head) < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::next_head()" );
 
-  inc = min_val<int>( inc, m_loop_end - m_loop_start - 1 ); // clamp the increment to the loop length
+  inc = min_val<float>( inc, m_loop_end - m_loop_start - 1 ); // clamp the increment to the loop length
   //ASSERT_MSG( inc > 0 && inc < m_loop_end - m_loop_start, "Invalid inc AUDIO_FREEZE_EFFECT::next_head()" );
   
   if( m_reverse )
@@ -321,9 +360,19 @@ void AUDIO_FREEZE_EFFECT::update()
   ASSERT_MSG( trunc_to_int(m_head) >= 0 && trunc_to_int(m_head) < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::update()" );
   ASSERT_MSG( m_loop_start >= 0 && m_loop_start < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::update()" );
   ASSERT_MSG( m_loop_end >= 0 && m_loop_end < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::update()" );
+
+  const float old_speed = m_speed;
+	
+  const float time_inc = AUDIO_BLOCK_SAMPLES * ( 1.0f / AUDIO_SAMPLE_RATE );
+  const float lfo = m_lfo.next( time_inc );
+	
+  constexpr float MAX_ADJ( ( 1.0f / 12.0f ) * 0.1f ); // 10 cents of a semitone
+  m_speed += lfo * MAX_ADJ;
 	
   process_audio_in( 0 );
   process_audio_out( 0 );
+	
+  m_speed = old_speed;
 }
 
 void AUDIO_FREEZE_EFFECT::set_bit_depth_impl( int sample_size_in_bits )

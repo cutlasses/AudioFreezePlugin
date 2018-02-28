@@ -174,6 +174,13 @@ int random( int max )
  */
 #include <stdlib.h>
 #include <memory>
+
+inline float random_ranged( float min, float max )
+{
+	const float range = max - min;
+	return ( ( static_cast<float>( rand() ) / RAND_MAX ) * range ) + min;
+}
+
 inline int random( int max )
 {
     return static_cast<int>( ( static_cast<float>( rand() ) / RAND_MAX ) * max );

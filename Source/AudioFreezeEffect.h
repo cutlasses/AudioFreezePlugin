@@ -9,6 +9,30 @@ extern int AUDIO_BLOCK_SAMPLES;           // NASTY HACK - make these global for 
 extern int AUDIO_SAMPLE_RATE;
 #endif
 
+////////////////////////////////////////
+
+class RANDOM_LFO
+{
+	float				m_min_period;
+	float				m_max_period;
+	
+	float				m_p_ratio;
+	float				m_time;
+	
+	float				m_prev_value;
+	
+	void				set_period( float seconds );
+	void				choose_next_period();
+	
+public:
+	
+	RANDOM_LFO( float min_period, float max_period );
+	
+	float				next( float time_inc );
+};
+
+////////////////////////////////////////
+
 class AUDIO_FREEZE_EFFECT : public TEENSY_AUDIO_STREAM_WRAPPER
 {
   uint8     	       	m_buffer[FREEZE_QUEUE_SIZE_IN_BYTES];
@@ -32,6 +56,8 @@ class AUDIO_FREEZE_EFFECT : public TEENSY_AUDIO_STREAM_WRAPPER
   float                 m_next_length;
   float                 m_next_centre;
   float                 m_next_speed;
+	
+  RANDOM_LFO			m_lfo;
   
 
 
