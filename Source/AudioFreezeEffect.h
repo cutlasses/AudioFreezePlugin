@@ -56,8 +56,10 @@ class AUDIO_FREEZE_EFFECT : public TEENSY_AUDIO_STREAM_WRAPPER
   float                 m_next_length;
   float                 m_next_centre;
   float                 m_next_speed;
+  bool					m_next_freeze_active;
 	
-  RANDOM_LFO			m_lfo;
+  RANDOM_LFO			m_wow_lfo;
+  RANDOM_LFO			m_flutter_lfo;
   
 
 
@@ -68,7 +70,7 @@ class AUDIO_FREEZE_EFFECT : public TEENSY_AUDIO_STREAM_WRAPPER
   
   void                  write_to_buffer( const int16_t* source, int size );
   void                  read_from_buffer( int16_t* dest, int size );
-  int16_t               read_sub_sample( float next ) const;
+  int16_t               read_sub_sample( float current, float next ) const;
   void                  read_from_buffer_with_speed( int16_t* dest, int size );
   void                  read_from_buffer_with_speed_and_cross_fade( int16_t* dest, int size );
   
@@ -78,6 +80,7 @@ class AUDIO_FREEZE_EFFECT : public TEENSY_AUDIO_STREAM_WRAPPER
   void                  set_length_impl( float length );
   void                  set_centre_impl( float centre );
   void                  set_speed_impl( float speed );
+  void					set_freeze_impl( bool active );
 
 protected:
 	

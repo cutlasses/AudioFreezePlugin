@@ -19,7 +19,7 @@ int AUDIO_SAMPLE_RATE( 44100 );           // TODO need a value in JUCE
 const float MIN_SPEED( 0.25f );
 const float MAX_SPEED( 4.0f );
 
-const int CROSS_FADE_SAMPLES( ( AUDIO_SAMPLE_RATE / 1000.0f ) * 4 ); // 4ms cross fade
+const int CROSS_FADE_SAMPLES( ( AUDIO_SAMPLE_RATE / 1000.0f ) * 5 );
 
 
 /////////////////////////////////////////////////////////////////////
@@ -73,7 +73,7 @@ float RANDOM_LFO::next( float time_inc )
 AUDIO_FREEZE_EFFECT::AUDIO_FREEZE_EFFECT() :
   m_buffer(),
   m_head(0),
-  m_speed(0.25f),
+  m_speed(0.5f),
   m_loop_start(0),
   m_loop_end(freeze_queue_size_in_samples(16) - 1),
   m_sample_size_in_bits(16),
@@ -82,10 +82,12 @@ AUDIO_FREEZE_EFFECT::AUDIO_FREEZE_EFFECT() :
   m_reverse(false),
   m_cross_fade(true),
   m_next_sample_size_in_bits(16),
-  m_next_length(0.25f),
+  m_next_length(1.0f),
   m_next_centre(0.5f),
-  m_next_speed(0.25f),
-  m_lfo( 1.0f, 8.0f )
+  m_next_speed(0.5f),
+  m_next_freeze_active(false),
+  m_wow_lfo( 0.5f, 4.0f ),
+  m_flutter_lfo( 0.02f, 0.03f )
 {
   memset( m_buffer, 0, sizeof(m_buffer) );
 }
@@ -172,6 +174,12 @@ void AUDIO_FREEZE_EFFECT::write_to_buffer( const int16_t* source, int size )
   for( int x = 0; x < size; ++x )
   {
     write_sample( source[x], trunc_to_int(m_head) );
+	  
+	const int diff  = m_head == 0 ? abs( read_sample( m_buffer_size_in_samples - 1 ) - read_sample( trunc_to_int(m_head) ) ) : abs( read_sample( trunc_to_int(m_head) - 1 ) - read_sample( trunc_to_int(m_head) ) );
+	if( trunc_to_int(m_head) > 0 && diff > 2000 )
+	{
+		printf( "WHOOPS" );
+	}
 
     if( trunc_to_int(++m_head) == m_buffer_size_in_samples )
     {
@@ -196,9 +204,9 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer( int16_t* dest, int size )
   }
 }
 
-int16_t AUDIO_FREEZE_EFFECT::read_sub_sample( float next ) const
+int16_t AUDIO_FREEZE_EFFECT::read_sub_sample( float current, float next ) const
 {
-  int curr_index          = truncf( m_head );
+  int curr_index          = truncf( current );
   int next_index          = truncf( next );
 
   ASSERT_MSG( curr_index >= 0 && curr_index < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed()" );
@@ -230,7 +238,7 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed( int16_t* dest, int size )
       {
         float next              = next_head( m_speed );
 
-        dest[x]                 = read_sub_sample( next );
+        dest[x]                 = read_sub_sample( m_head, next );
 
         m_head                  = next;
       }
@@ -245,43 +253,88 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed( int16_t* dest, int size )
 
 void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed_and_cross_fade( int16_t* dest, int size )
 {
+	// NOTE - does not currently support reverse
     ASSERT_MSG( trunc_to_int(m_head) >= 0 && trunc_to_int(m_head) < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed()" );
-
+	
+	auto read_sample_with_speed = [this]( float head, float speed ) -> int16_t
+	{
+		int16_t sample( 0 );
+		if( speed < 1.0f )
+		{
+			float next           = head + speed;
+			
+			if( next >= m_buffer_size_in_samples )
+			{
+				next			-= m_buffer_size_in_samples;
+			}
+			
+			sample               = read_sub_sample( head, next );
+		}
+		else
+		{
+			sample               = read_sample( head );
+		}
+		
+		return sample;
+	};
+	
     const int cross_fade_start  = m_loop_end - CROSS_FADE_SAMPLES;
-
+	
+	int16_t prev_sample( 0 );
+	
     for( int x = 0; x < size; ++x )
     {
-      const int headi           = trunc_to_int(m_head);
-
-      int16_t sample( 0 );
-      if( m_speed < 1.0f )
-      {
-        float next              = next_head( m_speed );
-
-        sample                  = read_sub_sample( next );
-
-        m_head                  = next;
-      }
-      else
-      {
-        sample                  = read_sample( headi );
-        
-        m_head                  = next_head( m_speed );
-      }
+	  const int headi			= truncf( m_head );
+	  const int16_t sample		= read_sample_with_speed( m_head, m_speed );
 
       if( headi >= cross_fade_start )
       {
-        const int cf_offset     = cross_fade_start - m_loop_start - CROSS_FADE_SAMPLES; // cross fade start before the loop starts and fades in
+        const int cf_offset     = cross_fade_start - m_loop_start; // cross fade start before the loop starts and fades in
         const float cf_head     = m_head - cf_offset;
-        const float cf_t        = ( headi - cross_fade_start ) / static_cast<float>(CROSS_FADE_SAMPLES);
-        const int16_t cf_sample = m_speed < 1.0f ? read_sub_sample( cf_head ) : read_sample( cf_head );
+		const int16_t cf_sample = read_sample_with_speed( cf_head, m_speed );
+		  
+		if( headi == cross_fade_start )
+		{
+			printf( "START cross fade cfstart:%d head:%f sample:%d\n", cross_fade_start, m_head, cf_sample );
+		}
 
-        dest[x]                 = lerp( cf_sample, sample, cf_t );
+		if( headi >= m_loop_end )
+		{
+			// cross fade complete, jump head to end of cross fade
+			m_head				= cf_head;
+			dest[x]				= cf_sample;
+			
+			printf( "END cross fade cfstart:%d head:%f sample:%d\n", cross_fade_start, m_head, cf_sample );
+		}
+		else
+		{
+			const float cf_t	= ( m_head - cross_fade_start ) / static_cast<float>(CROSS_FADE_SAMPLES);
+			ASSERT_MSG( cf_t >= 0.0f && cf_t <= 1.0f, "Invalid t" );
+
+			dest[x]          	= lerp( sample, cf_sample, cf_t );
+			
+			//printf( "cross fade start:%d head:%f cf_head:%f s:%d cf_s:%d t:%f final:%d\n", cross_fade_start, m_head, cf_head, sample, cf_sample, cf_t, dest[x] );
+		}
       }
       else
       {
+		//printf( "head:%f sample:%d\n", m_head, sample );
         dest[x]                 = sample;
       }
+		
+		
+	  if( x > 0 && abs( prev_sample - dest[x] ) > 2000 )
+	  {
+		  printf( "OPPS head:%f\n", m_head );
+	  }
+	  prev_sample				= dest[x];
+		
+	  m_head					+= m_speed;
+		
+	  if( m_head >= m_buffer_size_in_samples )
+	  {
+		  m_head				-= m_buffer_size_in_samples;
+	  }
     }  
 }
 
@@ -294,7 +347,7 @@ float AUDIO_FREEZE_EFFECT::next_head( float inc ) const
   {
     // play head cannot be incremented
 #ifdef DEBUG_OUTPUT
-    Serial.print("loop length is 1");
+    DEBUG_TEXT("loop length is 1");
 #endif
     return m_loop_start;
   }
@@ -332,17 +385,17 @@ float AUDIO_FREEZE_EFFECT::next_head( float inc ) const
 #ifdef DEBUG_OUTPUT
     if( truncf(next_head) < 0 || truncf(next_head) >= m_buffer_size_in_samples )
     {
-      Serial.print("next_head ");
-      Serial.print(next_head);
-      Serial.print(" rem  ");
-      Serial.print(next_head - m_loop_end - 1.0f);
-      Serial.print( " loop start ");
-      Serial.print(m_loop_start);
-      Serial.print( " loop end ");
-      Serial.print(m_loop_end);
-      Serial.print( " inc ");
-      Serial.print(inc);
-      Serial.print( "\n");          
+      DEBUG_TEXT("next_head ");
+      DEBUG_TEXT(next_head);
+      DEBUG_TEXT(" rem  ");
+      DEBUG_TEXT(next_head - m_loop_end - 1.0f);
+      DEBUG_TEXT( " loop start ");
+      DEBUG_TEXT(m_loop_start);
+      DEBUG_TEXT( " loop end ");
+      DEBUG_TEXT(m_loop_end);
+      DEBUG_TEXT( " inc ");
+      DEBUG_TEXT(inc);
+      DEBUG_TEXT( "\n");
     }
 #endif
     
@@ -356,6 +409,8 @@ void AUDIO_FREEZE_EFFECT::update()
   set_length_impl( m_next_length );
   set_centre_impl( m_next_centre );
   set_speed_impl( m_next_speed );
+  set_freeze_impl( m_next_freeze_active );
+
 
   ASSERT_MSG( trunc_to_int(m_head) >= 0 && trunc_to_int(m_head) < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::update()" );
   ASSERT_MSG( m_loop_start >= 0 && m_loop_start < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::update()" );
@@ -364,10 +419,15 @@ void AUDIO_FREEZE_EFFECT::update()
   const float old_speed = m_speed;
 	
   const float time_inc = AUDIO_BLOCK_SAMPLES * ( 1.0f / AUDIO_SAMPLE_RATE );
-  const float lfo = m_lfo.next( time_inc );
+  const float wow_lfo = m_wow_lfo.next( time_inc );
+  const float flutter_lfo = m_flutter_lfo.next( time_inc );
 	
-  constexpr float MAX_ADJ( ( 1.0f / 12.0f ) * 0.1f ); // 10 cents of a semitone
-  m_speed += lfo * MAX_ADJ;
+	
+  constexpr float MAX_ADJ_WOW( ( 1.0f / 12.0f ) * 0.65f ); // 20 cents of a semitone
+  constexpr float MAX_ADJ_FLUTTER( ( 1.0f / 12.0f ) * 0.25f ); // 20 cents of a semitone
+  const float wow		= ( wow_lfo * 0.25f )  * MAX_ADJ_WOW;
+  const float flutter	= ( flutter_lfo * 0.75f ) * MAX_ADJ_FLUTTER;
+  m_speed				+= wow + flutter;
 	
   process_audio_in( 0 );
   process_audio_out( 0 );
@@ -389,9 +449,9 @@ void AUDIO_FREEZE_EFFECT::set_bit_depth_impl( int sample_size_in_bits )
       memset( m_buffer, 0, sizeof(m_buffer) );
 
 #ifdef DEBUG_OUTPUT
-      Serial.print("Set bit depth:");
-      Serial.print( m_sample_size_in_bits );
-      Serial.print("\n");
+      DEBUG_TEXT("Set bit depth:");
+      DEBUG_TEXT( m_sample_size_in_bits );
+      DEBUG_TEXT("\n");
 #endif
   }
 }
@@ -408,17 +468,17 @@ void AUDIO_FREEZE_EFFECT::set_length_impl( float length )
 #ifdef DEBUG_OUTPUT
   if( m_loop_end < m_loop_start || m_loop_start < 0 || m_loop_start > m_buffer_size_in_samples - 1 || m_loop_end < 0 || m_loop_end > m_buffer_size_in_samples - 1 )
   {
-    Serial.print( "set length** loop_start:" );
-    Serial.print( m_loop_start );
-    Serial.print( " loop_end:" );
-    Serial.print( m_loop_end );
-    Serial.print( " loop_length:" );
-    Serial.print( loop_length );
-    Serial.print( " length:" );
-    Serial.print( length );
-    Serial.print( " buffer size:");
-    Serial.print( m_buffer_size_in_samples );
-    Serial.print( "\n" );
+    DEBUG_TEXT( "set length** loop_start:" );
+    DEBUG_TEXT( m_loop_start );
+    DEBUG_TEXT( " loop_end:" );
+    DEBUG_TEXT( m_loop_end );
+    DEBUG_TEXT( " loop_length:" );
+    DEBUG_TEXT( loop_length );
+    DEBUG_TEXT( " length:" );
+    DEBUG_TEXT( length );
+    DEBUG_TEXT( " buffer size:");
+    DEBUG_TEXT( m_buffer_size_in_samples );
+    DEBUG_TEXT( "\n" );
   }
 #endif
 
@@ -473,23 +533,91 @@ void AUDIO_FREEZE_EFFECT::set_centre_impl( float centre )
 #ifdef DEBUG_OUTPUT
   if( m_loop_end < m_loop_start || m_loop_start < 0 || m_loop_start > m_buffer_size_in_samples - 1 || m_loop_end < 0 || m_loop_end > m_buffer_size_in_samples - 1 )
   {
-    Serial.print( "set set_centre_impl*** loop_start:" );
-    Serial.print( m_loop_start );
-    Serial.print( " loop_end:" );
-    Serial.print( m_loop_end );
-    Serial.print( " loop_length:" );
-    Serial.print( loop_length );
-    Serial.print( " buffer size:");
-    Serial.print( m_buffer_size_in_samples );
-    Serial.print( " centre:" );
-    Serial.print( centre_index );
-    Serial.print( "\n" );
+    DEBUG_TEXT( "set set_centre_impl*** loop_start:" );
+    DEBUG_TEXT( m_loop_start );
+    DEBUG_TEXT( " loop_end:" );
+    DEBUG_TEXT( m_loop_end );
+    DEBUG_TEXT( " loop_length:" );
+    DEBUG_TEXT( loop_length );
+    DEBUG_TEXT( " buffer size:");
+    DEBUG_TEXT( m_buffer_size_in_samples );
+    DEBUG_TEXT( " centre:" );
+    DEBUG_TEXT( centre_index );
+   	DEBUG_TEXT( "\n" );
   }
 #endif
 
   ASSERT_MSG( m_loop_end >= m_loop_start, "AUDIO_FREEZE_EFFECT::set_centre()" );
   ASSERT_MSG( m_loop_start >= 0 && m_loop_start < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::set_centre()" );
   ASSERT_MSG( m_loop_end >= 0 && m_loop_end < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::set_centre()" );
+}
+
+void AUDIO_FREEZE_EFFECT::set_freeze_impl( bool active )
+{
+	if( m_cross_fade )
+	{
+		if( active && active != m_freeze_active )
+		{
+			auto check_buffer = [&]( const char* string )
+			{
+				for( int x = 1; x < m_buffer_size_in_samples; ++x )
+				{
+					const int16_t p = read_sample( x - 1 );
+					const int16_t c = read_sample( x );
+					
+					if( abs( p - c ) > 2000 )
+					{
+						printf( "%s x:%d\n", string, x );
+					}
+				}
+			};
+			
+			check_buffer( "PRE ERROR" );
+			
+			printf( "Freeze started head:%f\n", m_head );
+			// cross fade where the new audio (at the head) meets old
+			// blend the final new sample into the old section
+			int headi = truncf( m_head ) - 1;
+			
+			if( headi < 0 )
+			{
+				headi = m_buffer_size_in_samples - 1;
+			}
+			
+			const int cross_fade_start = headi;
+			
+			const int16_t new_sample = read_sample( headi );
+			
+			for( int x = 0; x < CROSS_FADE_SAMPLES; ++x )
+			{
+				if( ++headi >= m_buffer_size_in_samples )
+				{
+					headi = 0;
+				}
+				
+				const int16_t old_sample	= read_sample( headi );
+				
+				float cf_t( 0.0f );
+				if( headi >= cross_fade_start )
+				{
+					cf_t					= ( headi - cross_fade_start ) / static_cast<float>(CROSS_FADE_SAMPLES);
+				}
+				else
+				{
+					// head has wrapped around
+					cf_t					= ( headi + ( m_buffer_size_in_samples - cross_fade_start ) ) / static_cast<float>(CROSS_FADE_SAMPLES);
+				}
+				
+				const float cf_sample		= lerp( new_sample, old_sample, cf_t );
+				
+				write_sample( cf_sample, headi );
+			}
+			
+			check_buffer( "POST ERROR" );
+		}
+	}
+	
+	m_freeze_active = active;
 }
 
 void AUDIO_FREEZE_EFFECT::process_audio_in_impl( int channel, const int16_t* sample_data, int num_samples )
@@ -522,7 +650,7 @@ bool AUDIO_FREEZE_EFFECT::is_freeze_active() const
 
 void AUDIO_FREEZE_EFFECT::set_freeze( bool active )
 {
-  m_freeze_active = active;  
+  m_next_freeze_active = active;
 }
 
 void AUDIO_FREEZE_EFFECT::set_reverse( bool reverse )
