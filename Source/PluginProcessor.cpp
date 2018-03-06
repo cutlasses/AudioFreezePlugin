@@ -67,7 +67,74 @@ AudioFreezePluginAudioProcessor::AudioFreezePluginAudioProcessor()
 	addParameter( m_freeze_active = new AudioParameterBool(	"freeze",     			// parameterID
 														   	"Freeze!",     			// parameter name
 														   	false ) );       		// default value
+/*
+ AudioParameterFloat*									m_loop_size;
+ AudioParameterFloat*									m_loop_centre;
+ AudioParameterFloat*									m_speed;
+ 
+ AudioParameterFloat*									m_wow_min_freq;
+ AudioParameterFloat*									m_wow_max_freq;
+ AudioParameterFloat*									m_wow_amount;
+ AudioParameterFloat*									m_flutter_min_freq;
+ AudioParameterFloat*									m_flutter_max_freq;
+ AudioParameterFloat*									m_flutter_amount;
+ */
+	
+	
+	addParameter( m_loop_size = new AudioParameterFloat(		"loop_size",     		// parameterID
+													   			"Loop Size",     		// parameter name
+													   			0.0f,           		// minimum value
+													   			1.0f,   				// maximum value
+													   			1.0f ) );       		// default value
 
+	addParameter( m_loop_centre = new AudioParameterFloat(		"loop_centre",     		// parameterID
+																"Loop Centre",     		// parameter name
+																0.0f,           		// minimum value
+																1.0f,   				// maximum value
+																0.5f ) );       		// default value
+	
+	addParameter( m_speed = new AudioParameterFloat(			"speed",     			// parameterID
+																"Speed",     			// parameter name
+																0.0f,           		// minimum value
+																1.0f,   				// maximum value
+																0.5f ) );       		// default value
+	
+	addParameter( m_wow_min_freq = new AudioParameterFloat(		"wow_min_freq",     	// parameterID
+																"Wow Min Freq",     	// parameter name
+																0.1f,           		// minimum value
+																5.0f,   				// maximum value
+																1.0f ) );       		// default value
+	
+	addParameter( m_wow_max_freq = new AudioParameterFloat(		"wow_max_freq",     	// parameterID
+														   		"Wow Max Freq",     	// parameter name
+														   		0.1f,           		// minimum value
+														   		5.0f,   				// maximum value
+														   		1.0f ) );       		// default value
+	
+	addParameter( m_wow_amount = new AudioParameterFloat(		"wow_amount",     		// parameterID
+																"Wow Amount",     		// parameter name
+																0.0f,           		// minimum value
+																1.0f,   				// maximum value
+																0.25f ) );       		// default value
+	
+	addParameter( m_flutter_min_freq = new AudioParameterFloat(	"flutter_min_freq",		// parameterID
+															   	"Flutter Min Freq",  	// parameter name
+															   	0.1f,           		// minimum value
+															   	5.0f,   				// maximum value
+															   	1.0f ) );       		// default value
+	
+	addParameter( m_flutter_max_freq = new AudioParameterFloat(	"flutter_max_freq",		// parameterID
+															   	"Flutter Max Freq", 	// parameter name
+															   	0.1f,           		// minimum value
+															   	5.0f,   				// maximum value
+															   	1.0f ) );       		// default value
+	
+	addParameter( m_flutter_amount = new AudioParameterFloat(	"flutter_amount",   	// parameterID
+																 "Flutter Amount",  	// parameter name
+																 0.0f,           		// minimum value
+																 1.0f,   				// maximum value
+																 0.25f ) );       		// default value
+	
 }
 
 AudioFreezePluginAudioProcessor::~AudioFreezePluginAudioProcessor()
@@ -200,6 +267,9 @@ void AudioFreezePluginAudioProcessor::processBlock (AudioBuffer<float>& buffer, 
 	m_effect->pre_process_audio( buffer, m_effect->num_input_channels(), m_effect->num_output_channels() );
 	
 	m_effect->set_freeze( *m_freeze_active );
+	m_effect->set_length( *m_loop_size );
+	m_effect->set_centre( *m_loop_centre );
+	m_effect->set_speed( *m_speed );
 	
 	m_effect->update();
 	

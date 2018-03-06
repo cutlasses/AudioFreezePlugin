@@ -64,4 +64,15 @@ private:
 	std::unique_ptr<AUDIO_FREEZE_EFFECT>					m_effect;
 	
 	AudioParameterBool*										m_freeze_active;
+	
+	AudioParameterFloat*									m_loop_size;
+	AudioParameterFloat*									m_loop_centre;
+	AudioParameterFloat*									m_speed;
+	
+	AudioParameterFloat*									m_wow_min_freq;
+	AudioParameterFloat*									m_wow_max_freq;
+	AudioParameterFloat*									m_wow_amount;
+	AudioParameterFloat*									m_flutter_min_freq;
+	AudioParameterFloat*									m_flutter_max_freq;
+	AudioParameterFloat*									m_flutter_amount;
 };

@@ -17,7 +17,9 @@
 //==============================================================================
 /**
 */
-class AudioFreezePluginAudioProcessorEditor  : public AudioProcessorEditor, public ToggleButton::Listener
+class AudioFreezePluginAudioProcessorEditor  : 	public AudioProcessorEditor,
+												public Slider::Listener,
+												public ToggleButton::Listener
 {
 public:
     AudioFreezePluginAudioProcessorEditor (AudioFreezePluginAudioProcessor&);
@@ -26,6 +28,12 @@ public:
     //==============================================================================
     void paint (Graphics&) override;
     void resized() override;
+	
+	//// Slider::Listener ////
+	void sliderValueChanged (Slider* slider) override;
+	void sliderDragStarted (Slider* slider) override;
+	void sliderDragEnded (Slider* slider) override;
+	/////////////////////////
 	
 	//// ToggleButton::Listener ////
 	void buttonClicked (Button*) override;
@@ -36,8 +44,15 @@ private:
     // access the processor object that created it.
     AudioFreezePluginAudioProcessor& processor;
 	
+	OwnedArray<Slider>                              m_all_dials;
+	OwnedArray<Label>                               m_all_labels;
+	
 	ScopedPointer<ToggleButton>						m_freeze_button;
 	AudioParameterBool* 							m_freeze_param;
+	
+	std::vector<AudioParameterFloat*>				m_all_float_parameters;
+	
+	int												m_num_rows;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioFreezePluginAudioProcessorEditor)
 };
