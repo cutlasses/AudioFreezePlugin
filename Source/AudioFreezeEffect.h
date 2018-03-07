@@ -60,6 +60,9 @@ class AUDIO_FREEZE_EFFECT : public TEENSY_AUDIO_STREAM_WRAPPER
 	
   RANDOM_LFO			m_wow_lfo;
   RANDOM_LFO			m_flutter_lfo;
+	
+float					m_wow_amount;
+float					m_flutter_amount;
   
 
 
@@ -105,5 +108,8 @@ public:
   void                  set_reverse( bool reverse );
   void                  set_cross_fade( bool cross_fade );
   void                  set_bit_depth( int sample_size_in_bits );
+	
+  void					set_wow_amount( float amount );
+  void					set_flutter_amount( float amount );
 };
 

@@ -87,7 +87,9 @@ AUDIO_FREEZE_EFFECT::AUDIO_FREEZE_EFFECT() :
   m_next_speed(0.5f),
   m_next_freeze_active(false),
   m_wow_lfo( 0.5f, 4.0f ),
-  m_flutter_lfo( 0.02f, 0.03f )
+  m_flutter_lfo( 0.02f, 0.03f ),
+  m_wow_amount( 0.0f ),
+  m_flutter_amount( 0.0f )
 {
   memset( m_buffer, 0, sizeof(m_buffer) );
 }
@@ -279,6 +281,7 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed_and_cross_fade( int16_t* d
 	};
 	
     const int cross_fade_start  = m_loop_end - CROSS_FADE_SAMPLES;
+	const int cf_offset     	= cross_fade_start - m_loop_start; // cross fade start before the loop starts and fades in
 	
 	int16_t prev_sample( 0 );
 	
@@ -289,51 +292,26 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed_and_cross_fade( int16_t* d
 
       if( headi >= cross_fade_start )
       {
-        const int cf_offset     = cross_fade_start - m_loop_start; // cross fade start before the loop starts and fades in
         const float cf_head     = m_head - cf_offset;
 		const int16_t cf_sample = read_sample_with_speed( cf_head, m_speed );
-		  
-		if( headi == cross_fade_start )
-		{
-			printf( "START cross fade cfstart:%d head:%f sample:%d\n", cross_fade_start, m_head, cf_sample );
-		}
 
-		if( headi >= m_loop_end )
-		{
-			// cross fade complete, jump head to end of cross fade
-			m_head				= cf_head;
-			dest[x]				= cf_sample;
-			
-			printf( "END cross fade cfstart:%d head:%f sample:%d\n", cross_fade_start, m_head, cf_sample );
-		}
-		else
-		{
-			const float cf_t	= ( m_head - cross_fade_start ) / static_cast<float>(CROSS_FADE_SAMPLES);
-			ASSERT_MSG( cf_t >= 0.0f && cf_t <= 1.0f, "Invalid t" );
+		const float cf_t	= ( m_head - cross_fade_start ) / static_cast<float>(CROSS_FADE_SAMPLES);
+		ASSERT_MSG( cf_t >= 0.0f && cf_t <= 1.0f, "Invalid t" );
 
-			dest[x]          	= lerp( sample, cf_sample, cf_t );
-			
-			//printf( "cross fade start:%d head:%f cf_head:%f s:%d cf_s:%d t:%f final:%d\n", cross_fade_start, m_head, cf_head, sample, cf_sample, cf_t, dest[x] );
-		}
+		dest[x]          	= lerp( sample, cf_sample, cf_t );
       }
       else
       {
-		//printf( "head:%f sample:%d\n", m_head, sample );
-        dest[x]                 = sample;
+		dest[x]                 = sample;
       }
 		
-		
-	  if( x > 0 && abs( prev_sample - dest[x] ) > 2000 )
-	  {
-		  printf( "OPPS head:%f\n", m_head );
-	  }
 	  prev_sample				= dest[x];
 		
 	  m_head					+= m_speed;
 		
-	  if( m_head >= m_buffer_size_in_samples )
+	  if( m_head >= m_loop_end )
 	  {
-		  m_head				-= m_buffer_size_in_samples;
+		  m_head				-= cf_offset;
 	  }
     }  
 }
@@ -423,10 +401,10 @@ void AUDIO_FREEZE_EFFECT::update()
   const float flutter_lfo = m_flutter_lfo.next( time_inc );
 	
 	
-  constexpr float MAX_ADJ_WOW( ( 1.0f / 12.0f ) * 0.65f ); // 20 cents of a semitone
-  constexpr float MAX_ADJ_FLUTTER( ( 1.0f / 12.0f ) * 0.25f ); // 20 cents of a semitone
-  const float wow		= ( wow_lfo * 0.25f )  * MAX_ADJ_WOW;
-  const float flutter	= ( flutter_lfo * 0.75f ) * MAX_ADJ_FLUTTER;
+  constexpr float MAX_ADJ_WOW( ( 1.0f / 12.0f ) ); // 20 cents of a semitone
+  constexpr float MAX_ADJ_FLUTTER( ( 1.0f / 12.0f ) ); // 20 cents of a semitone
+  const float wow		= ( wow_lfo * m_wow_amount )  * MAX_ADJ_WOW;
+  const float flutter	= ( flutter_lfo * m_flutter_amount ) * MAX_ADJ_FLUTTER;
   m_speed				+= wow + flutter;
 	
   process_audio_in( 0 );
@@ -687,4 +665,13 @@ void AUDIO_FREEZE_EFFECT::set_bit_depth( int sample_size_in_bits )
   //set_bit_depth_impl( sample_size_in_bits );
 }
 
+void AUDIO_FREEZE_EFFECT::set_wow_amount( float amount )
+{
+	m_wow_amount = amount;
+}
+
+void AUDIO_FREEZE_EFFECT::set_flutter_amount( float amount )
+{
+	m_flutter_amount = amount;
+}
 

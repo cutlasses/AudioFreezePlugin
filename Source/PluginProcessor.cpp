@@ -271,6 +271,9 @@ void AudioFreezePluginAudioProcessor::processBlock (AudioBuffer<float>& buffer, 
 	m_effect->set_centre( *m_loop_centre );
 	m_effect->set_speed( *m_speed );
 	
+	m_effect->set_wow_amount( *m_wow_amount );
+	m_effect->set_flutter_amount( *m_flutter_amount );
+	
 	m_effect->update();
 	
 	AudioSampleBuffer output( m_effect->num_output_channels(), buffer.getNumSamples() );
