@@ -106,6 +106,11 @@ inline int trunc_to_int( float v )
   return static_cast<int>( v );
 }
 
+inline int round_to_int( float v )
+{
+	return static_cast<int>( v + 0.5f );
+}
+
 /////////////////////////////////////////////////////
 
 template < typename TYPE, int CAPACITY >

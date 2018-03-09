@@ -113,7 +113,9 @@ public:
   void                  set_cross_fade( bool cross_fade );
   void                  set_bit_depth( int sample_size_in_bits );
 	
+  void					set_wow_frequency_range( float min_frequency, float max_frequency );
   void					set_wow_amount( float amount );
+  void					set_flutter_frequency_range( float min_frequency, float max_frequency );
   void					set_flutter_amount( float amount );
 };
 

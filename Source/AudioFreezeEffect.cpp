@@ -19,7 +19,7 @@ int AUDIO_SAMPLE_RATE( 44100 );           // TODO need a value in JUCE
 const float MIN_SPEED( 0.25f );
 const float MAX_SPEED( 4.0f );
 
-const int CROSS_FADE_SAMPLES( lroundf(( AUDIO_SAMPLE_RATE / 1000.0f ) * 5) );
+const int CROSS_FADE_SAMPLES( round_to_int(( AUDIO_SAMPLE_RATE / 1000.0f ) * 5) );
 
 
 /////////////////////////////////////////////////////////////////////
@@ -285,7 +285,7 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed_and_cross_fade( int16_t* d
 		}
 		else
 		{
-			sample               = read_sample( lroundf(head) );
+			sample               = read_sample( round_to_int(head) );
 		}
 		
 		return sample;
@@ -451,7 +451,7 @@ void AUDIO_FREEZE_EFFECT::set_length_impl( float length )
   ASSERT_MSG( m_loop_end >= 0 && m_loop_end < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::set_length_impl() pre" ); 
   ASSERT_MSG( length >= 0 && length <= 1.0f, "AUDIO_FREEZE_EFFECT::set_length_impl()" );
 
-  const int loop_length = lroundf( length * m_buffer_size_in_samples );
+  const int loop_length = round_to_int( length * m_buffer_size_in_samples );
   m_loop_end            = min_val<int>( m_loop_start + loop_length, m_buffer_size_in_samples - 1 );
 
 #ifdef DEBUG_OUTPUT
@@ -496,7 +496,7 @@ void AUDIO_FREEZE_EFFECT::set_centre_impl( float centre )
 {
   ASSERT_MSG( centre >= 0 && centre < 1.0f, "AUDIO_FREEZE_EFFECT::set_centre_impl()" );
   
-  int centre_index      = lroundf( centre * m_buffer_size_in_samples );
+  int centre_index      = round_to_int( centre * m_buffer_size_in_samples );
 
   int loop_length       = min_val<int>( m_loop_end - m_loop_start + 1, m_buffer_size_in_samples - 1 );
   ASSERT_MSG( loop_length < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::set_centre() loop too long" );
@@ -597,7 +597,7 @@ void AUDIO_FREEZE_EFFECT::set_freeze_impl( bool active )
 					cf_t					= ( headi + ( m_buffer_size_in_samples - cross_fade_start ) ) / static_cast<float>(CROSS_FADE_SAMPLES);
 				}
 				
-				const int16_t cf_sample		= static_cast<int16_t>( lroundf( lerp( new_sample, old_sample, cf_t ) ) );
+				const int16_t cf_sample		= static_cast<int16_t>( round_to_int( lerp( new_sample, old_sample, cf_t ) ) );
 				
 				write_sample( cf_sample, headi );
 			}
@@ -676,6 +676,11 @@ void AUDIO_FREEZE_EFFECT::set_bit_depth( int sample_size_in_bits )
   //set_bit_depth_impl( sample_size_in_bits );
 }
 
+void AUDIO_FREEZE_EFFECT::set_wow_frequency_range( float min_frequency, float max_frequency )
+{
+	m_wow_lfo.set_frequency_range( min_frequency, max_frequency );
+}
+
 void AUDIO_FREEZE_EFFECT::set_wow_amount( float amount )
 {
 	m_wow_amount = amount;
@@ -684,5 +689,10 @@ void AUDIO_FREEZE_EFFECT::set_wow_amount( float amount )
 void AUDIO_FREEZE_EFFECT::set_flutter_amount( float amount )
 {
 	m_flutter_amount = amount;
+}
+
+void AUDIO_FREEZE_EFFECT::set_flutter_frequency_range( float min_frequency, float max_frequency )
+{
+	m_flutter_lfo.set_frequency_range( min_frequency, max_frequency );
 }
 
