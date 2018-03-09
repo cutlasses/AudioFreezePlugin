@@ -19,7 +19,7 @@ int AUDIO_SAMPLE_RATE( 44100 );           // TODO need a value in JUCE
 const float MIN_SPEED( 0.25f );
 const float MAX_SPEED( 4.0f );
 
-const int CROSS_FADE_SAMPLES( ( AUDIO_SAMPLE_RATE / 1000.0f ) * 5 );
+const int CROSS_FADE_SAMPLES( lroundf(( AUDIO_SAMPLE_RATE / 1000.0f ) * 5) );
 
 
 /////////////////////////////////////////////////////////////////////
@@ -32,14 +32,14 @@ int freeze_queue_size_in_samples( int sample_size_in_bits )
 
 /////////////////////////////////////////////////////////////////////
 
-RANDOM_LFO::RANDOM_LFO( float min_period, float max_period ) :
-  m_min_period( min_period ),
-  m_max_period( max_period ),
+RANDOM_LFO::RANDOM_LFO( float min_frequency, float max_frequency ) :
+  m_min_frequency( min_frequency ),
+  m_max_frequency( max_frequency ),
   m_p_ratio( 0.0f ),
   m_time( 0.0f ),
   m_prev_value( 0.0f )
 {
-	choose_next_period();
+	choose_next_frequency();
 }
 
 void RANDOM_LFO::set_period( float seconds )
@@ -47,9 +47,20 @@ void RANDOM_LFO::set_period( float seconds )
 	m_p_ratio = ( 2.0f * M_PI ) / seconds;
 }
 
-void RANDOM_LFO::choose_next_period()
+void RANDOM_LFO::set_frequency( float hz )
 {
-	set_period( random_ranged( m_min_period, m_max_period ) );
+	m_p_ratio = ( 2.0f * M_PI ) * hz;
+}
+
+void RANDOM_LFO::choose_next_frequency()
+{
+	set_frequency( random_ranged( m_min_frequency, m_max_frequency ) );
+}
+
+void RANDOM_LFO::set_frequency_range( float min_frequency, float max_frequency )
+{
+	m_min_frequency = min_frequency;
+	m_max_frequency = max_frequency;
 }
 
 float RANDOM_LFO::next( float time_inc )
@@ -61,7 +72,7 @@ float RANDOM_LFO::next( float time_inc )
 	if( m_prev_value > 0.0f != next_value > 0.0f )
 	{
 		// recalculate the period on the zero crossing
-		choose_next_period();
+		choose_next_frequency();
 	}
 	
 	m_prev_value = next_value;
@@ -86,8 +97,8 @@ AUDIO_FREEZE_EFFECT::AUDIO_FREEZE_EFFECT() :
   m_next_centre(0.5f),
   m_next_speed(0.5f),
   m_next_freeze_active(false),
-  m_wow_lfo( 0.5f, 4.0f ),
-  m_flutter_lfo( 0.02f, 0.03f ),
+  m_wow_lfo( 1.0f / 0.5f, 1.0f / 4.0f ),
+  m_flutter_lfo( 1.0f / 0.02f, 1.0f / 0.03f ),
   m_wow_amount( 0.0f ),
   m_flutter_amount( 0.0f )
 {
@@ -201,15 +212,15 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer( int16_t* dest, int size )
     // head will have limited movement in freeze mode
     if( ++m_head >= m_loop_end )
     {
-      m_head                  = m_loop_start;
+      m_head                  = static_cast<float>(m_loop_start);
     } 
   }
 }
 
 int16_t AUDIO_FREEZE_EFFECT::read_sub_sample( float current, float next ) const
 {
-  int curr_index          = truncf( current );
-  int next_index          = truncf( next );
+  const int curr_index          = trunc_to_int( current );
+  const int next_index          = trunc_to_int( next );
 
   ASSERT_MSG( curr_index >= 0 && curr_index < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed()" );
   ASSERT_MSG( next_index >= 0 && next_index < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed()" );
@@ -223,8 +234,8 @@ int16_t AUDIO_FREEZE_EFFECT::read_sub_sample( float current, float next ) const
   {
     // crossing 2 samples - calculate how much of each sample to use, then lerp between them
     // use the fractional part - if 0.3 'into' next sample, then we mix 0.3 of next and 0.7 of current
-    double int_part;
-    float rem             = m_reverse ? modf( m_head, &int_part ) : modf( next, &int_part );
+    float int_part;
+    float rem             = m_reverse ? modff( m_head, &int_part ) : modff( next, &int_part );
     const float t         = rem / m_speed;      
     return lerp( read_sample(curr_index), read_sample(next_index), t );          
   }
@@ -274,7 +285,7 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed_and_cross_fade( int16_t* d
 		}
 		else
 		{
-			sample               = read_sample( head );
+			sample               = read_sample( lroundf(head) );
 		}
 		
 		return sample;
@@ -287,7 +298,7 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed_and_cross_fade( int16_t* d
 	
     for( int x = 0; x < size; ++x )
     {
-	  const int headi			= truncf( m_head );
+	  const int headi			= trunc_to_int( m_head );
 	  const int16_t sample		= read_sample_with_speed( m_head, m_speed );
 
       if( headi >= cross_fade_start )
@@ -327,7 +338,7 @@ float AUDIO_FREEZE_EFFECT::next_head( float inc ) const
 #ifdef DEBUG_OUTPUT
     DEBUG_TEXT("loop length is 1");
 #endif
-    return m_loop_start;
+    return static_cast<float>(m_loop_start);
   }
 
   ASSERT_MSG( truncf(m_head) >= 0 && truncf(m_head) < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::next_head()" );
@@ -383,7 +394,7 @@ float AUDIO_FREEZE_EFFECT::next_head( float inc ) const
 
 void AUDIO_FREEZE_EFFECT::update()
 {      
-  set_bit_depth_impl( m_next_sample_size_in_bits);
+  set_bit_depth_impl( m_next_sample_size_in_bits );
   set_length_impl( m_next_length );
   set_centre_impl( m_next_centre );
   set_speed_impl( m_next_speed );
@@ -440,7 +451,7 @@ void AUDIO_FREEZE_EFFECT::set_length_impl( float length )
   ASSERT_MSG( m_loop_end >= 0 && m_loop_end < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::set_length_impl() pre" ); 
   ASSERT_MSG( length >= 0 && length <= 1.0f, "AUDIO_FREEZE_EFFECT::set_length_impl()" );
 
-  const int loop_length = roundf( length * m_buffer_size_in_samples );
+  const int loop_length = lroundf( length * m_buffer_size_in_samples );
   m_loop_end            = min_val<int>( m_loop_start + loop_length, m_buffer_size_in_samples - 1 );
 
 #ifdef DEBUG_OUTPUT
@@ -485,7 +496,7 @@ void AUDIO_FREEZE_EFFECT::set_centre_impl( float centre )
 {
   ASSERT_MSG( centre >= 0 && centre < 1.0f, "AUDIO_FREEZE_EFFECT::set_centre_impl()" );
   
-  int centre_index      = roundf( centre * m_buffer_size_in_samples );
+  int centre_index      = lroundf( centre * m_buffer_size_in_samples );
 
   int loop_length       = min_val<int>( m_loop_end - m_loop_start + 1, m_buffer_size_in_samples - 1 );
   ASSERT_MSG( loop_length < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::set_centre() loop too long" );
@@ -555,7 +566,7 @@ void AUDIO_FREEZE_EFFECT::set_freeze_impl( bool active )
 			printf( "Freeze started head:%f\n", m_head );
 			// cross fade where the new audio (at the head) meets old
 			// blend the final new sample into the old section
-			int headi = truncf( m_head ) - 1;
+			int headi = trunc_to_int( m_head ) - 1;
 			
 			if( headi < 0 )
 			{
@@ -586,7 +597,7 @@ void AUDIO_FREEZE_EFFECT::set_freeze_impl( bool active )
 					cf_t					= ( headi + ( m_buffer_size_in_samples - cross_fade_start ) ) / static_cast<float>(CROSS_FADE_SAMPLES);
 				}
 				
-				const float cf_sample		= lerp( new_sample, old_sample, cf_t );
+				const int16_t cf_sample		= static_cast<int16_t>( lroundf( lerp( new_sample, old_sample, cf_t ) ) );
 				
 				write_sample( cf_sample, headi );
 			}

@@ -13,21 +13,25 @@ extern int AUDIO_SAMPLE_RATE;
 
 class RANDOM_LFO
 {
-	float				m_min_period;
-	float				m_max_period;
+	float				m_min_frequency;
+	float				m_max_frequency;
 	
 	float				m_p_ratio;
 	float				m_time;
 	
 	float				m_prev_value;
 	
+	void				choose_next_frequency();
+
 	void				set_period( float seconds );
-	void				choose_next_period();
-	
+	void				set_frequency( float hz );
+
 public:
 	
-	RANDOM_LFO( float min_period, float max_period );
-	
+	RANDOM_LFO( float min_frequency, float max_frequency );
+
+	void				set_frequency_range( float min_frequency, float max_frequency );
+
 	float				next( float time_inc );
 };
 
@@ -52,7 +56,7 @@ class AUDIO_FREEZE_EFFECT : public TEENSY_AUDIO_STREAM_WRAPPER
   bool                  m_cross_fade;
 
   // store 'next' values, otherwise interrupt could be called during calculation of values
-  float                 m_next_sample_size_in_bits;
+  int	                m_next_sample_size_in_bits;
   float                 m_next_length;
   float                 m_next_centre;
   float                 m_next_speed;

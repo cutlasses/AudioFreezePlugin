@@ -20,11 +20,11 @@ namespace
     {
         if( s > 0.0f )
         {
-            return s * std::numeric_limits< int16_t >::max();
+            return lroundf( s * std::numeric_limits< int16_t >::max() );
         }
         else
         {
-			return -s * std::numeric_limits< int16_t >::min();
+			return lroundf( -s * std::numeric_limits< int16_t >::min() );
         }
     }
     
