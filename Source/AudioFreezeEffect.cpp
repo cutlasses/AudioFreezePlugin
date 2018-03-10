@@ -217,28 +217,43 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer( int16_t* dest, int size )
   }
 }
 
-int16_t AUDIO_FREEZE_EFFECT::read_sub_sample( float current, float next ) const
+int16_t AUDIO_FREEZE_EFFECT::read_sub_sample( float current ) const
 {
-  const int curr_index          = trunc_to_int( current );
-  const int next_index          = trunc_to_int( next );
-
-  ASSERT_MSG( curr_index >= 0 && curr_index < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed()" );
-  ASSERT_MSG( next_index >= 0 && next_index < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed()" );
-
-  if( curr_index == next_index )
-  {
-    // both current and next are in the same sample
-    return read_sample(curr_index);
-  }
-  else
-  {
-    // crossing 2 samples - calculate how much of each sample to use, then lerp between them
-    // use the fractional part - if 0.3 'into' next sample, then we mix 0.3 of next and 0.7 of current
-    float int_part;
-    float rem             = m_reverse ? modff( m_head, &int_part ) : modff( next, &int_part );
-    const float t         = rem / m_speed;      
-    return lerp( read_sample(curr_index), read_sample(next_index), t );          
-  }
+	// linearly interpolate between the current sample and its neighbour
+	// (previous neighbour if frac is less than 0.5, otherwise next)
+	const int int_part			= trunc_to_int( current );
+	const float frac_part		= current - int_part;
+	
+	const int16_t curr_samp		= read_sample( int_part );
+	
+	if( frac_part < 0.5f )
+	{
+		int prev				= int_part - 1;
+		if( prev < 0 )
+		{
+			prev				= m_buffer_size_in_samples - 1;
+		}
+		
+		const float t			= frac_part / 0.5f;
+		
+		const int16_t prev_samp	= read_sample( prev );
+		
+		return lerp( prev_samp, curr_samp, t );
+	}
+	else
+	{
+		int next				= int_part + 1;
+		if( next >= m_buffer_size_in_samples )
+		{
+			next				= 0;
+		}
+		
+		const float t			= ( frac_part - 0.5f ) / 0.5f;
+		
+		const int16_t next_samp	= read_sample( next );
+		
+		return lerp( curr_samp, next_samp, t );
+	}
 }
 
 void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed( int16_t* dest, int size )
@@ -247,20 +262,9 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed( int16_t* dest, int size )
 
     for( int x = 0; x < size; ++x )
     {
-      if( m_speed < 1.0f )
-      {
-        float next              = next_head( m_speed );
+		dest[x]                 = read_sub_sample( m_head );
 
-        dest[x]                 = read_sub_sample( m_head, next );
-
-        m_head                  = next;
-      }
-      else
-      {
-        dest[x]                 = read_sample( trunc_to_int(m_head) );
-        
-        m_head                  = next_head( m_speed );
-      }
+		m_head                  = next_head( m_speed );
     }
 }
 
@@ -268,28 +272,6 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed_and_cross_fade( int16_t* d
 {
 	// NOTE - does not currently support reverse
     ASSERT_MSG( trunc_to_int(m_head) >= 0 && trunc_to_int(m_head) < m_buffer_size_in_samples, "AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed()" );
-	
-	auto read_sample_with_speed = [this]( float head, float speed ) -> int16_t
-	{
-		int16_t sample( 0 );
-		if( speed < 1.0f )
-		{
-			float next           = head + speed;
-			
-			if( next >= m_buffer_size_in_samples )
-			{
-				next			-= m_buffer_size_in_samples;
-			}
-			
-			sample               = read_sub_sample( head, next );
-		}
-		else
-		{
-			sample               = read_sample( round_to_int(head) );
-		}
-		
-		return sample;
-	};
 	
     const int cross_fade_start  = m_loop_end - CROSS_FADE_SAMPLES;
 	const int cf_offset     	= cross_fade_start - m_loop_start; // cross fade start before the loop starts and fades in
@@ -299,12 +281,12 @@ void AUDIO_FREEZE_EFFECT::read_from_buffer_with_speed_and_cross_fade( int16_t* d
     for( int x = 0; x < size; ++x )
     {
 	  const int headi			= trunc_to_int( m_head );
-	  const int16_t sample		= read_sample_with_speed( m_head, m_speed );
+	  const int16_t sample		= read_sub_sample( m_head );
 
       if( headi >= cross_fade_start )
       {
         const float cf_head     = m_head - cf_offset;
-		const int16_t cf_sample = read_sample_with_speed( cf_head, m_speed );
+		const int16_t cf_sample = read_sub_sample( cf_head );
 
 		const float cf_t	= ( m_head - cross_fade_start ) / static_cast<float>(CROSS_FADE_SAMPLES);
 		ASSERT_MSG( cf_t >= 0.0f && cf_t <= 1.0f, "Invalid t" );

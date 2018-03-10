@@ -77,7 +77,7 @@ float					m_flutter_amount;
   
   void                  write_to_buffer( const int16_t* source, int size );
   void                  read_from_buffer( int16_t* dest, int size );
-  int16_t               read_sub_sample( float current, float next ) const;
+  int16_t               read_sub_sample( float current ) const;
   void                  read_from_buffer_with_speed( int16_t* dest, int size );
   void                  read_from_buffer_with_speed_and_cross_fade( int16_t* dest, int size );
   
